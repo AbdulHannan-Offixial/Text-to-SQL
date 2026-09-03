@@ -2,7 +2,7 @@ import os
 import json
 from dotenv import load_dotenv
 from groq import Groq
-from schema import QueryAnalysis
+from schemas import QueryAnalysis
 from schema_extractor import extract_database_schema
 
 # Automatically load environment variables from .env file
