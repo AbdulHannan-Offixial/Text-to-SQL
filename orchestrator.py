@@ -10,8 +10,8 @@ from schemas import (
 )
 from database_manager import DatabaseManager
 from agent_1_schema_analyzer import SchemaAnalyzerAgent
-from agent_2_clarification import ClarificationAgent
-from agent_3_sql_executor import SQLExecutorAgent
+from Clarification_agent import ClarificationAgent
+from SQLexecutor_agent import SQLExecutorAgent
 
 
 class TextToSQLOrchestrator:
