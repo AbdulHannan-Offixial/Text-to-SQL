@@ -83,7 +83,7 @@ from schemas import (
     export_schemas,
     _validate_sql,          # reuse the same guard from schemas.py
 )
-from database.database_manager import (
+from database_manager import (
     DatabaseManager,
     DatabaseManagerError,
     QueryResult,
@@ -377,19 +377,27 @@ class SQLValidator:
                     ))
 
         # ---- B07: Cartesian product risk ----
-        # Multiple FROM tables without JOINs = cross join
-        if from_node:
-            from_tables_direct = [
-                child for child in from_node.expressions
-                if isinstance(child, (sqlexp.Table, sqlexp.Alias))
-            ]
-            if len(from_tables_direct) > 1 and join_count == 0:
+        # sqlglot normalises "FROM a, b" into a CROSS JOIN node (kind='CROSS')
+        # with no ON/USING clause.  Detect it by inspecting every join node.
+        for join in join_nodes:
+            join_kind  = join.args.get("kind")
+            join_on    = join.args.get("on")
+            join_using = join.args.get("using")
+            is_cross = (
+                str(join_kind).upper() == "CROSS"
+                or (join_kind is None and join_on is None and join_using is None)
+            )
+            if is_cross:
                 issues.append(ValidationIssue(
                     code="B07",
                     severity="error",
-                    message="Multiple tables in FROM clause without JOIN — implicit Cartesian product.",
-                    suggestion="Use explicit JOIN ... ON syntax. Every multi-table query needs at least one JOIN condition.",
+                    message="Implicit Cartesian product — JOIN has no ON or USING clause.",
+                    suggestion=(
+                        "Replace comma-separated tables with explicit JOIN … ON. "
+                        "Every multi-table query needs a JOIN condition matching the FK path."
+                    ),
                 ))
+                break  # one error per query
 
         # ---- B08: Potentially wrong INNER JOIN (LEFT JOIN may be needed) ----
         for join in join_nodes:
@@ -406,7 +414,7 @@ class SQLValidator:
         div_nodes = list(tree.find_all(sqlexp.Div))
         for div in div_nodes:
             denom = div.right
-            if not isinstance(denom, sqlexp.Anonymous) and not isinstance(denom, sqlexp.NullSafeEq):
+            if not isinstance(denom, (sqlexp.Anonymous, sqlexp.Nullif, sqlexp.Case)):
                 # Check if denominator is a plain column or expression (not already NULLIF-wrapped)
                 denom_sql = denom.sql()
                 if "NULLIF" not in denom_sql.upper() and "CASE" not in denom_sql.upper():
